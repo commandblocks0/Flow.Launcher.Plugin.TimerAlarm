@@ -54,6 +54,7 @@ namespace TimerAlarmPlugin
         private DispatcherTimer? uiTimer;
         private int remainingSeconds = 0;
         private bool isAlarm = false;
+        private bool isPaused = false;
 
         private DispatcherTimer? ringingTimer;
         private MediaPlayer? mediaPlayer;
@@ -91,6 +92,35 @@ namespace TimerAlarmPlugin
             };
 
             uiTimer.Start();
+            isPaused = false;
+        }
+
+        public void Pause()
+        {
+            isPaused = true;
+            try
+            {
+                uiTimer?.Stop();
+            }
+            catch { }
+        }
+
+        public void Resume()
+        {
+            if (!isPaused)
+                return;
+
+            isPaused = false;
+            try
+            {
+                uiTimer?.Start();
+            }
+            catch { }
+        }
+
+        public bool IsPaused()
+        {
+            return isPaused;
         }
 
         private void BeginRinging(Action<Display>? onFinished)

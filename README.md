@@ -27,6 +27,13 @@ alarm 12 30      - Creates an alarm for 12:30
 alarm food 12 0  - Creates an alarm named "food" for 12:00
 ```
 
+### Pause/resume
+
+```text
+timer pause food
+alarm pause 1
+```
+
 ### Delete
 
 ```text
