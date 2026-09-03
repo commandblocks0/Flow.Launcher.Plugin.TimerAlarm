@@ -31,6 +31,17 @@ namespace TimerAlarmPlugin
                 {
                     new Result
                     {
+                        Title = "Pause by id",
+                        SubTitle = "Usage: pause [id]",
+                        IcoPath = "icon.png",
+                        Action = _ =>
+                        {
+                            _context?.API.ChangeQuery($"{query.ActionKeyword} pause ", true);
+                            return false;
+                        }
+                    },
+                    new Result
+                    {
                         Title = "Delete by id",
                         SubTitle = "Usage: del [id]",
                         IcoPath = "icon.png",
@@ -46,6 +57,10 @@ namespace TimerAlarmPlugin
             var delete = TryCreateDeleteResult(input);
             if (delete != null)
                 return delete;
+
+            var pause = TryCreatePauseResult(input);
+            if (pause != null)
+                return pause;
 
             bool isAlarm = query.ActionKeyword == "alarm";
 
@@ -153,6 +168,41 @@ namespace TimerAlarmPlugin
             };
         }
 
+        private List<Result>? TryCreatePauseResult(string input)
+        {
+            if (!input.StartsWith("pause", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            string rest = input[5..].Trim();
+
+            string id = rest.Trim();
+
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return new()
+                {
+                    new Result
+                    {
+                        Title = "Pause: invalid id",
+                        SubTitle = "Usage: pause [id]",
+                        IcoPath = "icon.png",
+                        Action = _ => false
+                    }
+                };
+            }
+
+            return new()
+            {
+                new Result
+                {
+                    Title = $"Pause/Resume {id}",
+                    SubTitle = $"Toggle pause/resume timer or alarm {id}",
+                    IcoPath = "icon.png",
+                    Action = _ => PauseById(id)
+                }
+            };
+        }
+
         private bool TryParseExistingId(string input, out string id)
         {
             id = input.Trim();
@@ -254,6 +304,31 @@ namespace TimerAlarmPlugin
                 activeWindows.Remove(display);
                 RepositionAllWindows();
             };
+
+            return true;
+        }
+
+        private bool PauseById(string id)
+        {
+            var display = activeWindows.FirstOrDefault(w =>
+                string.Equals(w.Id, id, StringComparison.OrdinalIgnoreCase));
+
+            if (display == null)
+                return false;
+
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                try
+                {
+                    if (display.IsPaused())
+                        display.Resume();
+                    else
+                        display.Pause();
+                }
+                catch
+                {
+                }
+            });
 
             return true;
         }
