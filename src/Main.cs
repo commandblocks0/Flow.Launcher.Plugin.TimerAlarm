@@ -117,20 +117,24 @@ namespace TimerAlarmPlugin
             if (string.IsNullOrWhiteSpace(input))
                 return (null, "");
 
-            var parts = input.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            string name = null;
+            string time = input;
 
-            if (parts.Length == 1)
+            var parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts[0].Any(char.IsLetter))
             {
-                if (parts[0].Any(char.IsDigit))
-                    return (null, parts[0]);
-
-                return (parts[0], "");
+                name = parts[0];
             }
 
-            if (parts[0].Any(char.IsDigit))
-                return (null, input);
+            if (parts.Last().Any(char.IsLetter))
+            {
+                name = parts.Last();
+            }
 
-            return (parts[0], parts[1]);
+            time = string.Join(' ', parts.Where(p => p.Any(char.IsDigit)).Take(3));
+
+            return (name, time);
         }
 
         private List<Result>? TryCreateDeleteResult(string input)
