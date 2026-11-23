@@ -1,24 +1,32 @@
-﻿using Flow.Launcher.Plugin;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows;
+using Flow.Launcher.Plugin;
+using Application = System.Windows.Application;
+using Timer = System.Timers.Timer;
 
 namespace TimerAlarmPlugin
 {
-    public class Main : IPlugin
+    public class Main : IPlugin, ISettingProvider
     {
         private PluginInitContext? _context;
+        
+        private Settings settings = new();
+        
         private readonly List<Display> activeWindows = new();
 
-        private System.Timers.Timer? visibilityTimer;
+        private Timer? visibilityTimer;
         private bool lastVisible;
 
         public void Init(PluginInitContext context)
         {
             _context = context;
             StartVisibilityWatcher();
+            settings = context.API.LoadSettingJsonStorage<Settings>();
+        }
+        
+        public System.Windows.Controls.Control CreateSettingPanel()
+        {
+            return new SettingsControl(settings);
         }
 
         public List<Result> Query(Query query)
@@ -298,9 +306,9 @@ namespace TimerAlarmPlugin
                     initialSeconds = day;
             }
 
-            display.Start(initialSeconds, !timerType, d =>
+            display.Start(initialSeconds, !timerType, settings.StopRingingAfter, d =>
             {
-                System.Windows.Application.Current.Dispatcher.Invoke(() => d.Close());
+                Application.Current.Dispatcher.Invoke(() => d.Close());
             });
 
             display.Closed += (_, _) =>
@@ -320,7 +328,7 @@ namespace TimerAlarmPlugin
             if (display == null)
                 return false;
 
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {
@@ -358,7 +366,7 @@ namespace TimerAlarmPlugin
 
         private void StartVisibilityWatcher()
         {
-            visibilityTimer = new System.Timers.Timer(100);
+            visibilityTimer = new Timer(100);
 
             visibilityTimer.Elapsed += (_, _) =>
             {
@@ -369,7 +377,7 @@ namespace TimerAlarmPlugin
 
                 lastVisible = visible;
 
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (visible)
                         ShowAllWindows();
@@ -409,7 +417,7 @@ namespace TimerAlarmPlugin
             if (display == null)
                 return false;
 
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            Application.Current.Dispatcher.Invoke(() =>
             {
                 try
                 {

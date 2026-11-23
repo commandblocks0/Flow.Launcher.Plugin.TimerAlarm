@@ -1,13 +1,12 @@
-﻿using System;
+﻿using System.IO;
+using System.Media;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using System.Windows.Forms;
-using System.Windows.Media.Animation;
-using System.Windows.Threading;
-using System.Media;
-using System.IO;
 using System.Windows.Media;
+using System.Windows.Threading;
+using System.Linq;
 
 namespace TimerAlarmPlugin
 {
@@ -24,6 +23,8 @@ namespace TimerAlarmPlugin
         const int WS_EX_TOOLWINDOW = 0x00000080;
         const int WS_EX_NOACTIVATE = 0x08000000;
         const int WS_EX_TOPMOST = 0x00000008;
+        
+        private int stopRingingAfter;
 
         public Display()
         {
@@ -57,6 +58,7 @@ namespace TimerAlarmPlugin
         private bool isPaused = false;
 
         private DispatcherTimer? ringingTimer;
+        private DispatcherTimer? autoStopTimer;
         private MediaPlayer? mediaPlayer;
 
         public void ShowOverlay()
@@ -67,10 +69,11 @@ namespace TimerAlarmPlugin
             Visibility = Visibility.Visible;
         }
 
-        public void Start(int initialSeconds, bool alarm, Action<Display>? onFinished = null)
+        public void Start(int initialSeconds, bool alarm, int stopRingingAfter, Action<Display>? onFinished = null)
         {
             remainingSeconds = Math.Max(0, initialSeconds);
             isAlarm = alarm;
+            this.stopRingingAfter = stopRingingAfter;
 
             TimeText.Text = FormatTime(remainingSeconds);
 
@@ -122,41 +125,91 @@ namespace TimerAlarmPlugin
         {
             return isPaused;
         }
+        
+        private void StartFallbackSound()
+        {
+            ringingTimer?.Stop();
+
+            ringingTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+
+            ringingTimer.Tick += (s, e) =>
+                SystemSounds.Exclamation.Play();
+
+            ringingTimer.Start();
+        }
 
         private void BeginRinging(Action<Display>? onFinished)
         {
-            try
-            {
-                var asmLocation = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                var asmDir = Path.GetDirectoryName(asmLocation) ?? AppDomain.CurrentDomain.BaseDirectory;
-                var file = Path.Combine(asmDir, "alarm.m4a");
-                var fullPath = Path.GetFullPath(file);
+            var asmLocation = Assembly.GetExecutingAssembly().Location;
+            var asmDir = Path.GetDirectoryName(asmLocation) ?? AppDomain.CurrentDomain.BaseDirectory;
+            
+            var file = Directory
+                .EnumerateFiles(asmDir, "alarm.*")
+                .FirstOrDefault();
 
+            if (file != null)
+            {
                 mediaPlayer = new MediaPlayer();
-                mediaPlayer.Open(new Uri(fullPath));
+
+                mediaPlayer.MediaFailed += (s, e) =>
+                {
+                    mediaPlayer?.Close();
+                    mediaPlayer = null;
+
+                    StartFallbackSound();
+                };
+
+                mediaPlayer.Open(new Uri(file));
+
                 mediaPlayer.MediaEnded += (s, e) =>
                 {
                     mediaPlayer.Position = TimeSpan.Zero;
                     mediaPlayer.Play();
                 };
+
                 mediaPlayer.Play();
             }
-            catch
+            else
             {
-                ringingTimer?.Stop();
-                ringingTimer = new DispatcherTimer();
-                ringingTimer.Interval = TimeSpan.FromSeconds(1);
-                ringingTimer.Tick += (s, e) => SystemSounds.Exclamation.Play();
-                ringingTimer.Start();
+                StartFallbackSound();
             }
 
             var msg = $"{TypeText.Text} {Id} is ringing.";
             var popup = new DismissWindow(msg);
             popup.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+
+            autoStopTimer?.Stop();
+            autoStopTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(stopRingingAfter)
+            };
+
+            autoStopTimer.Tick += (s, e) =>
+            {
+                autoStopTimer.Stop();
+                autoStopTimer = null;
+
+                ringingTimer?.Stop();
+                ringingTimer = null;
+
+                mediaPlayer?.Stop();
+                mediaPlayer?.Close();
+                mediaPlayer = null;
+            };
+
+            autoStopTimer.Start();
+
             popup.ShowDialog();
+
+            autoStopTimer?.Stop();
+            autoStopTimer = null;
 
             ringingTimer?.Stop();
             ringingTimer = null;
+
             try
             {
                 mediaPlayer?.Stop();
@@ -167,7 +220,7 @@ namespace TimerAlarmPlugin
 
             onFinished?.Invoke(this);
         }
-
+        
         private string FormatTime(int time)
         {
             int h = time / 3600;
